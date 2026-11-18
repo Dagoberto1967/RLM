@@ -1,0 +1,718 @@
+---
+title: "Regresión lineal múltiple"
+subtitle: "Fundamentos teóricos, estimación, validación de supuestos y actividades prácticas"
+author: 
+  - name: Dagoberto Salgado Horta
+    affiliation: "Escuela Superior de Administración Pública"
+    affiliation-url: "https://www.esap.edu.co/"
+date: today
+lang: es
+title-block-banner: "#98b6ed"
+
+format:
+  html:
+    page-layout: full
+    fontsize: 14pt
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    number-sections: true
+    code-fold: true
+    code-summary: "Ver código"
+    theme: dark
+    highlight-style: monokai
+    html-math-method: katex
+    smooth-scroll: true
+    link-external-newwindow: true
+    code-overflow: scroll
+    favicon: favicon.ico
+    css: estilos.css
+    
+editor: visual
+
+knitr:
+  opts_chunk:
+    message: false
+    warning: false
+    fig.align: center
+    fig.width: 6
+    fig.height: 6
+    out.width: "70%"
+---
+
+
+
+```{=html}
+<div style="position:absolute; top:10px; right:10px;">
+<img src="Logo_Esap.png" width="150">
+</div>
+```
+
+```{=html}
+<style>
+body{
+  background-color:#f7f6ed;
+  font-size:130%;
+  text-align:justify;
+}
+</style>
+```
+
+# .Cargar paquetes
+
+```{r}
+ipak <- function(pkg){
+
+  options(repos = c(CRAN="https://cloud.r-project.org"))
+
+  new.pkg <- pkg[!(pkg %in% rownames(installed.packages()))]
+
+  if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+
+  invisible(lapply(pkg, function(p)
+    suppressPackageStartupMessages(library(p, character.only = TRUE))
+  ))
+}
+
+packages <- c("tidyverse", "car", "lmtest", "broom", "sandwich", "readxl")
+
+ipak(packages)
+```
+
+# .Presentación
+
+La **regresión lineal múltiple** es una técnica estadística que permite estudiar la relación entre una variable respuesta cuantitativa y dos o más variables explicativas. Además de estimar la asociación entre las variables, el modelo permite realizar predicciones y evaluar cuánto aporta cada predictor, manteniendo constantes los demás.
+
+En este material se estudia la formulación del modelo, la interpretación de sus coeficientes, la estimación por mínimos cuadrados ordinarios y la validación de los principales supuestos. Se utiliza un ejemplo simulado en el contexto de la administración pública y, al final, se propone un ejercicio para los estudiantes.
+
+::: {.callout-note}
+**Resultados de aprendizaje**
+
+Al finalizar, el estudiante podrá:
+
+1. Explicar el propósito y la estructura de un modelo de regresión lineal múltiple.
+2. Estimar un modelo en R e interpretar sus coeficientes, pruebas de significancia y medidas de ajuste.
+3. Examinar los supuestos mediante gráficos y pruebas estadísticas.
+4. Identificar problemas de multicolinealidad y observaciones influyentes.
+5. Comunicar los resultados con criterio estadístico, sin confundir asociación con causalidad.
+:::
+
+# .Conceptos fundamentales
+
+## .¿Qué es la regresión lineal múltiple?
+
+Es un método que modela el valor esperado de una variable cuantitativa $Y$ en función de $k$ variables explicativas $X_1, X_2, \ldots, X_k$.
+
+Por ejemplo, una entidad pública puede estudiar si el número mensual de trámites atendidos se relaciona con las horas de capacitación del personal, los años de experiencia y el nivel de implementación tecnológica.
+
+La regresión es **múltiple** porque incorpora más de una variable explicativa. Se diferencia de la regresión lineal simple, que utiliza un solo predictor.
+
+## .Ecuación del modelo
+
+El modelo poblacional se expresa como:
+
+$$
+Y_i=\beta_0+\beta_1X_{1i}+\beta_2X_{2i}+\cdots+\beta_kX_{ki}+\varepsilon_i
+$$
+
+Donde:
+
+- $Y_i$: valor de la variable respuesta para la observación $i$.
+- $\beta_0$: intercepto o valor esperado de $Y$ cuando todos los predictores valen cero.
+- $\beta_j$: cambio esperado en $Y$ asociado con un aumento de una unidad en $X_j$, manteniendo constantes los demás predictores.
+- $X_{ji}$: valor del predictor $j$ para la observación $i$.
+- $\varepsilon_i$: término de error aleatorio.
+
+Una vez estimado el modelo, se obtiene:
+
+$$
+\widehat{Y}_i=b_0+b_1X_{1i}+\cdots+b_kX_{ki}
+$$
+
+El residuo de cada observación es:
+
+$$
+e_i=Y_i-\widehat{Y}_i
+$$
+
+## .Interpretación de los coeficientes
+
+Supóngase que se estima el modelo:
+
+$$
+\widehat{Y}=120+3.5X_1+2.1X_2+8.0X_3
+$$
+
+Si $Y$ representa trámites atendidos por mes, $X_1$ horas de capacitación, $X_2$ años de experiencia y $X_3$ un índice tecnológico, entonces:
+
+- **Intercepto (120):** número esperado de trámites cuando los tres predictores son cero. Su interpretación práctica depende de si ese escenario tiene sentido.
+- **Capacitación (3.5):** por cada hora adicional de capacitación, se esperan 3.5 trámites adicionales al mes, manteniendo constantes experiencia e índice tecnológico.
+- **Experiencia (2.1):** por cada año adicional de experiencia, se esperan 2.1 trámites adicionales al mes, manteniendo constantes los otros predictores.
+- **Índice tecnológico (8.0):** por cada unidad adicional del índice, se esperan 8 trámites adicionales al mes, manteniendo constantes los demás predictores.
+
+La interpretación de cada coeficiente es **condicional**: compara observaciones con iguales valores en los demás predictores.
+
+## .Estimación por mínimos cuadrados ordinarios
+
+El método de mínimos cuadrados ordinarios (MCO) selecciona los coeficientes que minimizan la suma de los cuadrados de los residuos:
+
+$$
+SCE=\sum_{i=1}^{n}(Y_i-\widehat{Y}_i)^2
+$$
+
+En notación matricial:
+
+$$
+\widehat{\boldsymbol{\beta}}=(X'X)^{-1}X'Y
+$$
+
+siempre que la matriz $X'X$ sea invertible. La multicolinealidad perfecta impide obtener una solución única por esta expresión.
+
+## .¿Cómo se evalúa el modelo?
+
+- **$R^2$:** proporción de la variabilidad observada de $Y$ explicada por el conjunto de predictores en la muestra.
+- **$R^2$ ajustado:** ajusta el $R^2$ teniendo en cuenta el número de predictores y el tamaño de muestra; resulta útil al comparar modelos con diferente número de variables.
+- **Prueba F global:** contrasta si todos los coeficientes de pendiente son simultáneamente cero.
+- **Pruebas t individuales:** evalúan si cada coeficiente de pendiente es diferente de cero, condicionado a los demás predictores.
+- **Error estándar residual:** resume el tamaño típico de los residuos en las unidades de $Y$.
+
+Un $R^2$ alto no demuestra que el modelo sea correcto ni que exista causalidad. La evaluación debe incluir teoría, calidad de los datos, diagnóstico de residuos y validación del modelo.
+
+# .Supuestos y diagnóstico del modelo
+
+Los supuestos se refieren principalmente al comportamiento del error del modelo y a la especificación de la relación. No todos se verifican con una sola prueba. Se recomienda combinar gráficos, pruebas estadísticas y conocimiento del contexto.
+
+## .Linealidad y especificación adecuada
+
+Se supone que la media condicional de $Y$ puede representarse adecuadamente mediante una combinación lineal de los predictores incluidos. La linealidad se refiere a los parámetros; pueden incorporarse transformaciones o términos polinómicos si la teoría y los gráficos lo justifican.
+
+**Diagnóstico:** gráfico de residuos frente a valores ajustados y gráficos de residuos frente a cada predictor. Se espera una nube sin patrones sistemáticos. Curvaturas pueden indicar relaciones no lineales o variables omitidas.
+
+## .Independencia de los errores
+
+Los errores de distintas observaciones no deben presentar dependencia relevante. Es especialmente importante cuando los datos están ordenados en el tiempo, por ejemplo, mediciones mensuales de una misma entidad.
+
+**Diagnóstico:** revisar cómo se recolectaron los datos y, cuando el orden tenga significado temporal, examinar residuos según el tiempo y utilizar una prueba apropiada, como Durbin-Watson para autocorrelación de primer orden en determinados modelos.
+
+::: {.callout-warning}
+La prueba Durbin-Watson no debe interpretarse mecánicamente en datos transversales cuyo orden de filas es arbitrario. La independencia también depende del diseño de muestreo y de la estructura de los datos.
+:::
+
+## .Homoscedasticidad
+
+Se supone que la varianza del error condicional a los predictores es constante:
+
+$$
+Var(\varepsilon_i\mid X)=\sigma^2
+$$
+
+Cuando la dispersión de los errores cambia según el nivel ajustado o los predictores, existe heteroscedasticidad.
+
+**Diagnóstico gráfico:** residuos frente a valores ajustados. Una forma de embudo puede sugerir varianza no constante.
+
+**Prueba:** Breusch-Pagan. Sus hipótesis son:
+
+- $H_0$: varianza constante (homoscedasticidad).
+- $H_1$: varianza no constante (heteroscedasticidad).
+
+Con un nivel de significancia de 0.05, un valor p menor que 0.05 aporta evidencia contra la homoscedasticidad. Un valor p mayor o igual que 0.05 significa que no se rechaza $H_0$; no demuestra que el supuesto sea verdadero.
+
+## .Normalidad de los errores
+
+Para la inferencia clásica exacta en muestras pequeñas se suele asumir que los errores condicionales son normales:
+
+$$
+\varepsilon_i\mid X \sim N(0,\sigma^2)
+$$
+
+La normalidad se refiere a los errores no observables; en la práctica se examinan los residuos como aproximación.
+
+**Diagnóstico:** gráfico Q-Q e histograma de residuos.
+
+**Prueba:** Shapiro-Wilk.
+
+- $H_0$: los residuos son compatibles con una distribución normal.
+- $H_1$: los residuos no son compatibles con una distribución normal.
+
+Un valor p pequeño indica evidencia contra la normalidad. La prueba puede detectar desviaciones pequeñas en muestras grandes y tener poca potencia en muestras pequeñas. Por eso debe interpretarse junto con el Q-Q plot y el tamaño de muestra.
+
+La normalidad no es requisito para que los estimadores MCO sean insesgados bajo los demás supuestos pertinentes; es principalmente relevante para la inferencia exacta en muestras pequeñas.
+
+## .Ausencia de multicolinealidad severa
+
+Los predictores no deben presentar relaciones lineales exactas y es deseable que no exista multicolinealidad severa. Cuando los predictores están muy correlacionados, los errores estándar pueden aumentar y los coeficientes individuales volverse inestables.
+
+**Diagnóstico:** matriz de correlaciones entre predictores y factor de inflación de la varianza (VIF).
+
+Como reglas orientativas, VIF por encima de 5 puede motivar revisión y por encima de 10 suele considerarse una señal más preocupante. No son límites universales: deben valorarse según el propósito, la teoría y la estructura de los datos.
+
+## .Valores atípicos y observaciones influyentes
+
+Una observación puede tener un residuo grande, alto apalancamiento o una influencia importante sobre los coeficientes.
+
+- **Residuo estudentizado:** ayuda a identificar observaciones con respuestas inusuales respecto del modelo.
+- **Apalancamiento (leverage):** mide qué tan extrema es la combinación de predictores.
+- **Distancia de Cook:** resume cuánto cambiaría el ajuste al retirar una observación.
+
+La referencia $4/n$ para distancia de Cook es una regla exploratoria, no un criterio automático para eliminar datos. Toda observación señalada debe revisarse por posibles errores, características legítimas o problemas de especificación.
+
+## .Resumen de los diagnósticos
+
+| Supuesto o aspecto | Herramienta | Señal de alerta |
+|---|---|---|
+| Linealidad | Residuos vs. ajustados y predictores | Curvatura o patrón sistemático |
+| Independencia | Diseño, orden temporal, Durbin-Watson cuando proceda | Dependencia o autocorrelación |
+| Homoscedasticidad | Residuos vs. ajustados, Breusch-Pagan | Embudo o evidencia de varianza no constante |
+| Normalidad de residuos | Q-Q plot, histograma, Shapiro-Wilk | Desviaciones marcadas de la diagonal |
+| Multicolinealidad | Correlaciones y VIF | VIF elevados o predictores redundantes |
+| Influencia | Residuos, leverage y Cook | Casos que afectan sustancialmente el ajuste |
+
+# .Ejemplo aplicado: desempeño de una oficina pública
+
+## .Situación problema
+
+Una alcaldía desea estudiar los factores asociados con el número de trámites atendidos mensualmente por sus oficinas. Para ilustrar el procedimiento se construirá una base **simulada** de 120 oficinas. Se consideran cuatro variables:
+
+| Variable | Descripción | Unidad |
+|---|---|---|
+| `tramites` | Trámites atendidos al mes (respuesta) | Número de trámites |
+| `capacitacion` | Horas de capacitación del personal | Horas |
+| `experiencia` | Experiencia promedio del personal | Años |
+| `tecnologia` | Índice de implementación tecnológica | Escala 0–10 |
+| `personal` | Número de funcionarios asignados | Personas |
+
+La pregunta de investigación es: **¿en qué medida las horas de capacitación, la experiencia del personal, la implementación tecnológica y el número de funcionarios se relacionan con la cantidad mensual de trámites atendidos?**
+
+## .Preparación de datos y estimación
+
+```{r}
+# Instalar una sola vez si los paquetes no están disponibles:
+# install.packages(c("tidyverse", "car", "lmtest", "broom"))
+
+library(tidyverse)
+library(car)
+library(lmtest)
+library(broom)
+
+set.seed(2026)
+
+n <- 120
+
+Data <- tibble(
+  capacitacion = runif(n, 2, 20),
+  experiencia = runif(n, 1, 18),
+  tecnologia = runif(n, 1, 10),
+  personal = sample(5:20, n, replace = TRUE)
+) %>%
+  mutate(
+    tramites = 75 +
+      5.2 * capacitacion +
+      2.8 * experiencia +
+      11.5 * tecnologia +
+      13.0 * personal +
+      rnorm(n, mean = 0, sd = 28)
+  )
+
+glimpse(Data)
+summary(Data)
+```
+
+La base es simulada con fines pedagógicos. Los resultados numéricos pueden variar si se modifica la semilla o el mecanismo de simulación.
+
+Estimamos el modelo:
+
+```{r}
+modelo <- lm(
+  tramites ~ capacitacion + experiencia + tecnologia + personal,
+  data = Data
+)
+
+summary(modelo)
+```
+
+## .Interpretación de la salida
+
+En `summary(modelo)` se deben examinar:
+
+1. **Estimate:** cambio estimado en trámites mensuales por una unidad adicional del predictor, manteniendo constantes los demás.
+2. **Std. Error:** incertidumbre de la estimación del coeficiente.
+3. **t value y Pr(>|t|):** estadístico t y valor p para la hipótesis de que el coeficiente es cero.
+4. **Multiple R-squared:** proporción de variabilidad explicada por el modelo en esta muestra.
+5. **Adjusted R-squared:** medida de ajuste que penaliza la inclusión de predictores.
+6. **F-statistic:** prueba de significancia global del modelo.
+
+Para presentar una tabla ordenada:
+
+```{r}
+broom::tidy(modelo, conf.int = TRUE)
+broom::glance(modelo)
+```
+
+La significancia estadística no sustituye la interpretación sustantiva. Un coeficiente puede ser estadísticamente significativo y tener poca importancia práctica, o viceversa.
+
+## .Predicción para una oficina
+
+Se construye un escenario ilustrativo con 10 horas de capacitación, 8 años de experiencia, índice tecnológico de 7 y 12 funcionarios:
+
+```{r}
+nueva_oficina <- tibble(
+  capacitacion = 10,
+  experiencia = 8,
+  tecnologia = 7,
+  personal = 12
+)
+
+predict(
+  modelo,
+  newdata = nueva_oficina,
+  interval = "prediction",
+  level = 0.95
+)
+```
+
+El intervalo de predicción representa un rango para una observación individual bajo el modelo. Es más amplio que el intervalo de confianza para la media condicional.
+
+# .Validación de los supuestos en R
+
+## .Diagnóstico gráfico general
+
+```{r}
+par(mfrow = c(2, 2))
+plot(modelo)
+par(mfrow = c(1, 1))
+```
+
+Los cuatro gráficos estándar de `plot.lm()` permiten revisar, entre otros aspectos, residuos frente a ajustados, normalidad aproximada, escala-localización y observaciones con influencia.
+
+## .Linealidad y homoscedasticidad: residuos frente a ajustados
+
+```{r}
+diagnostico <- tibble(
+  ajustados = fitted(modelo),
+  residuos = residuals(modelo)
+)
+
+ggplot(diagnostico, aes(x = ajustados, y = residuos)) +
+  geom_point(color = "#2364AA", alpha = 0.75, size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, color = "#D1495B") +
+  labs(
+    title = "Residuos frente a valores ajustados",
+    x = "Valores ajustados",
+    y = "Residuos"
+  ) +
+  theme_minimal()
+```
+
+**Interpretación:** se espera una nube de puntos sin curvatura clara y con dispersión aproximadamente constante. Un patrón curvo puede indicar falta de linealidad; una dispersión creciente o decreciente puede sugerir heteroscedasticidad.
+
+## .Normalidad: Q-Q plot e histograma
+
+```{r}
+ggplot(tibble(residuos = residuals(modelo)),
+       aes(sample = residuos)) +
+  stat_qq() +
+  stat_qq_line(color = "#D1495B") +
+  labs(
+    title = "Gráfico Q-Q de los residuos",
+    x = "Cuantiles teóricos",
+    y = "Cuantiles muestrales"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(tibble(residuos = residuals(modelo)),
+       aes(x = residuos)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 20, fill = "#6C9BCF",
+                 color = "white") +
+  stat_function(
+    fun = dnorm,
+    args = list(
+      mean = mean(residuals(modelo)),
+      sd = sd(residuals(modelo))
+    ),
+    color = "#D1495B",
+    linewidth = 1
+  ) +
+  labs(
+    title = "Distribución de los residuos",
+    x = "Residuos",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+```
+
+Prueba de Shapiro-Wilk:
+
+```{r}
+shapiro.test(residuals(modelo))
+```
+
+**Decisión:** si el valor p es menor que 0.05, se rechaza la hipótesis de normalidad. Si es igual o mayor que 0.05, no se rechaza. La conclusión debe contrastarse con los gráficos.
+
+## .Homoscedasticidad: prueba de Breusch-Pagan
+
+```{r}
+lmtest::bptest(modelo)
+```
+
+- $H_0$: homoscedasticidad.
+- $H_1$: heteroscedasticidad.
+
+Si el valor p es menor que 0.05, existe evidencia estadística de heteroscedasticidad. Si no, no se rechaza la hipótesis nula.
+
+Si se detecta heteroscedasticidad, se puede considerar el uso de errores estándar robustos para la inferencia, revisar la especificación, evaluar transformaciones justificadas o modelar la varianza. No se debe cambiar el modelo únicamente para obtener un valor p superior a 0.05.
+
+Ejemplo de errores estándar robustos tipo HC3:
+
+```{r}
+# Instalar si es necesario:
+# install.packages("sandwich")
+
+library(sandwich)
+lmtest::coeftest(modelo, vcov. = sandwich::vcovHC(modelo, type = "HC3"))
+```
+
+## .Independencia: Durbin-Watson cuando corresponda
+
+```{r}
+lmtest::dwtest(modelo)
+```
+
+- $H_0$: no existe autocorrelación de primer orden.
+- $H_1$: existe autocorrelación de primer orden.
+
+La prueba tiene sentido cuando las observaciones poseen un orden temporal o secuencial justificable. En esta base simulada de oficinas, el orden de las filas es arbitrario; por tanto, **no debe extraerse una conclusión sustantiva de Durbin-Watson**. En datos temporales, se debe conservar el orden cronológico y estudiar la estructura de los residuos.
+
+## .Multicolinealidad: factor VIF
+
+```{r}
+car::vif(modelo)
+```
+
+Como guía exploratoria, VIF mayores que 5 ameritan revisión y valores mayores que 10 pueden indicar multicolinealidad severa. Estos umbrales no son leyes universales.
+
+También puede examinarse la correlación entre los predictores:
+
+```{r}
+Data %>%
+  select(capacitacion, experiencia, tecnologia, personal) %>%
+  cor()
+```
+
+Una correlación alta entre dos predictores no demuestra por sí sola que el modelo sea inadecuado; se debe evaluar el VIF, el propósito del análisis y el conocimiento del fenómeno.
+
+## .Observaciones influyentes: distancia de Cook
+
+```{r}
+cook <- cooks.distance(modelo)
+
+influencia <- tibble(
+  observacion = seq_along(cook),
+  cooks_distance = cook
+)
+
+ggplot(influencia,
+       aes(x = observacion, y = cooks_distance)) +
+  geom_col(fill = "#6C9BCF") +
+  geom_hline(
+    yintercept = 4 / nrow(Data),
+    linetype = "dashed",
+    color = "#D1495B"
+  ) +
+  labs(
+    title = "Distancia de Cook por observación",
+    subtitle = "La línea discontinua representa la referencia exploratoria 4/n",
+    x = "Observación",
+    y = "Distancia de Cook"
+  ) +
+  theme_minimal()
+```
+
+**Identificar los casos con mayor distancia de Cook:**
+
+```{r}
+influencia %>%
+  arrange(desc(cooks_distance)) %>%
+  slice_head(n = 10)
+```
+
+Una observación influyente no debe eliminarse automáticamente. Primero se debe verificar si existe un error de digitación, una condición especial o una característica legítima de la población. También conviene comparar el modelo con y sin el caso, justificando cualquier decisión.
+
+## .Tabla resumen de pruebas
+
+El siguiente código reúne las pruebas principales. Recuerde que Durbin-Watson solo se interpreta si el orden de las observaciones tiene sentido.
+
+```{r}
+bp <- lmtest::bptest(modelo)
+sw <- shapiro.test(residuals(modelo))
+dw <- lmtest::dwtest(modelo)
+
+resultados_pruebas <- tibble(
+  Prueba = c("Breusch-Pagan", "Shapiro-Wilk", "Durbin-Watson"),
+  Estadistico = c(
+    unname(bp$statistic),
+    unname(sw$statistic),
+    unname(dw$statistic)
+  ),
+  Valor_p = c(bp$p.value, sw$p.value, dw$p.value),
+  Hipotesis_nula = c(
+    "Varianza constante",
+    "Residuos compatibles con normalidad",
+    "Sin autocorrelación de primer orden"
+  )
+) %>%
+  mutate(
+    Decision_05 = if_else(
+      Valor_p < 0.05,
+      "Rechazar H0",
+      "No rechazar H0"
+    )
+  )
+
+resultados_pruebas
+```
+
+La tabla automatiza la decisión estadística, pero no reemplaza la interpretación contextual. En particular, la decisión de Durbin-Watson no es pertinente para este ejemplo transversal simulado.
+
+# .¿Qué hacer si un supuesto no se cumple?
+
+| Hallazgo | Posibles acciones |
+|---|---|
+| No linealidad | Revisar gráficos, transformar variables o incluir términos no lineales con justificación |
+| Heteroscedasticidad | Considerar errores estándar robustos, transformación o modelado de varianza |
+| Autocorrelación | Revisar estructura temporal, especificación y métodos para series de tiempo |
+| Residuos no normales | Revisar valores extremos, especificación y tamaño muestral; considerar métodos robustos cuando proceda |
+| Multicolinealidad | Revisar variables redundantes, justificar selección o ampliar información |
+| Observaciones influyentes | Verificar datos, documentar casos y realizar análisis de sensibilidad |
+
+::: {.callout-important}
+No existe una prueba única que certifique que un modelo es correcto. La validación es un proceso de diagnóstico y razonamiento. Tampoco se deben eliminar variables u observaciones solo para conseguir resultados estadísticamente significativos.
+:::
+
+# .Ejercicio propuesto para los estudiantes
+
+## .Contexto: gestión de servicios en una alcaldía
+
+Una alcaldía desea analizar los factores relacionados con la satisfacción de los ciudadanos con la atención recibida. Se dispone de información de 80 jornadas de atención. La variable respuesta es el puntaje promedio de satisfacción, en una escala de 0 a 100. Se consideran como posibles predictores el tiempo promedio de espera, el número de funcionarios disponibles, las horas de capacitación del equipo y el porcentaje de trámites digitalizados.
+
+El docente puede proporcionar el archivo `ejercicio_regresion_multiple.csv` o los estudiantes pueden crear una base simulada con el código siguiente:
+
+```{r}
+set.seed(91)
+
+n_ejercicio <- 80
+
+Ejercicio <- tibble(
+  espera = runif(n_ejercicio, 5, 60),
+  funcionarios = sample(3:12, n_ejercicio, replace = TRUE),
+  capacitacion = runif(n_ejercicio, 0, 16),
+  digitalizacion = runif(n_ejercicio, 10, 95)
+) %>%
+  mutate(
+    satisfaccion = 92 -
+      0.48 * espera +
+      1.15 * funcionarios +
+      0.55 * capacitacion +
+      0.10 * digitalizacion +
+      rnorm(n_ejercicio, 0, 5)
+  )
+
+head(Ejercicio)
+```
+
+## .Actividades
+
+1. Identifique la variable dependiente y las variables independientes. Indique la unidad de medida de cada una.
+2. Formule el modelo de regresión lineal múltiple en notación matemática.
+3. Estime el modelo utilizando `lm()`.
+4. Escriba la ecuación de regresión estimada e interprete cada coeficiente en el contexto del problema.
+5. Interprete $R^2$, $R^2$ ajustado y la prueba F global.
+6. Determine cuáles predictores presentan evidencia estadística de asociación con la satisfacción, usando un nivel de significancia de 5%.
+7. Construya el gráfico de residuos frente a valores ajustados y evalúe linealidad y homoscedasticidad.
+8. Examine la normalidad de los residuos con un gráfico Q-Q y la prueba Shapiro-Wilk.
+9. Aplique Breusch-Pagan y formule una conclusión.
+10. Calcule los VIF y determine si existe evidencia de multicolinealidad preocupante.
+11. Examine la distancia de Cook e identifique observaciones que merezcan revisión.
+12. Redacte una conclusión de entre 150 y 200 palabras para un informe de gestión pública. Distinga asociación estadística de causalidad.
+
+## .Plantilla de código para resolver
+
+```{r}
+# 1. Estimar el modelo
+modelo_estudiantes <- lm(
+  satisfaccion ~ espera + funcionarios +
+    capacitacion + digitalizacion,
+  data = Ejercicio
+)
+
+# 2. Resumen del modelo
+summary(modelo_estudiantes)
+
+# 3. Intervalos de confianza
+confint(modelo_estudiantes)
+
+# 4. Diagnóstico gráfico
+par(mfrow = c(2, 2))
+plot(modelo_estudiantes)
+par(mfrow = c(1, 1))
+
+# 5. Pruebas de supuestos
+shapiro.test(residuals(modelo_estudiantes))
+lmtest::bptest(modelo_estudiantes)
+car::vif(modelo_estudiantes)
+
+# Durbin-Watson: interpretar solo si las filas tienen
+# un orden temporal o secuencial justificable.
+lmtest::dwtest(modelo_estudiantes)
+
+# 6. Influencia
+cooks.distance(modelo_estudiantes)
+```
+
+## .Preguntas para la reflexión
+
+- ¿Por qué el coeficiente de espera podría ser negativo?
+- ¿Qué significa comparar el efecto de una variable manteniendo constantes las demás?
+- ¿Qué consecuencias tendría utilizar el modelo para tomar decisiones si existe heteroscedasticidad?
+- ¿Por qué no es correcto afirmar que la capacitación causa mayor satisfacción únicamente porque su coeficiente resulte significativo?
+- ¿Qué información adicional necesitaría la alcaldía para fortalecer el análisis?
+
+# .Lista de verificación para el informe
+
+Antes de entregar el trabajo, compruebe que el informe incluya:
+
+- [ ] Pregunta de investigación y descripción de las variables.
+- [ ] Justificación de la selección de predictores.
+- [ ] Ecuación del modelo estimado.
+- [ ] Interpretación de coeficientes e intervalos de confianza.
+- [ ] Interpretación de $R^2$, $R^2$ ajustado y prueba F.
+- [ ] Gráficos de diagnóstico.
+- [ ] Evaluación de linealidad, independencia, homoscedasticidad y normalidad.
+- [ ] Evaluación de multicolinealidad.
+- [ ] Revisión de observaciones influyentes.
+- [ ] Conclusión contextualizada y limitaciones del análisis.
+
+# .Glosario
+
+- **Variable dependiente o respuesta:** variable cuantitativa que se desea explicar o predecir.
+- **Variable independiente o predictora:** variable utilizada para explicar o predecir la respuesta.
+- **Coeficiente:** cantidad que representa el cambio esperado en la respuesta por unidad de un predictor, manteniendo constantes los demás.
+- **Residuo:** diferencia entre el valor observado y el valor estimado.
+- **Homoscedasticidad:** constancia de la varianza condicional de los errores.
+- **Multicolinealidad:** asociación lineal entre dos o más variables explicativas.
+- **Apalancamiento:** grado en que una observación presenta una combinación inusual de predictores.
+- **Distancia de Cook:** medida de la influencia de una observación sobre el ajuste del modelo.
+
+# 9. Bibliografía básica
+
+- Field, A. (2013). *Discovering statistics using IBM SPSS Statistics* (4th ed.). SAGE.
+- James, G., Witten, D., Hastie, T., Tibshirani, R., & Taylor, J. (2023). *An introduction to statistical learning: With applications in Python*. Springer. https://www.statlearning.com/
+- Montgomery, D. C., Peck, E. A., & Vining, G. G. (2021). *Introduction to linear regression analysis* (6th ed.). Wiley.
+- Wooldridge, J. M. (2020). *Introductory econometrics: A modern approach* (7th ed.). Cengage.
+
+---
+
+**Nota docente:** el conjunto de datos del ejemplo y el del ejercicio se generan mediante simulación. No representan registros reales de una entidad pública. Para un análisis aplicado, sustituya esos datos por una base documentada, revise su calidad y describa el diseño de recolección.
